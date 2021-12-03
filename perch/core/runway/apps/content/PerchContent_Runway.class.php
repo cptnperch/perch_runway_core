@@ -282,7 +282,7 @@ class PerchContent_Runway extends PerchContent
 	                        break;
 	                }
 	            }
-	            $sql .= ' AND ('.implode($where, ' OR ').') ';
+	            $sql .= ' AND ('.implode(' OR ', $where).') ';
 	        }
 
 	        $sql .= ' AND idx.itemID=idx2.itemID AND idx.itemRev=idx2.itemRev
@@ -333,7 +333,7 @@ class PerchContent_Runway extends PerchContent
 	        }
 
 	        // Pagination
-	        if (isset($opts['paginate'])) {
+	        if (isset($opts['paginate']) && $opts['paginate']) {
 	            if (isset($opts['pagination-var'])) {
 	                $Paging = new PerchPaging($opts['pagination-var']);
 	            }else{
@@ -477,6 +477,13 @@ class PerchContent_Runway extends PerchContent
 
 	        if (PerchUtil::count($processed_vars)) {
 
+	        	if (isset($opts['api']) && $opts['api']==true) {
+                    $field_type_map = $Template->get_field_type_map();
+                    $api = true;
+                } else {
+                    $api = false;
+                }
+
 	        	$category_field_ids    = $Template->find_all_tag_ids('categories');
 
 	            foreach($processed_vars as &$item) {
@@ -486,6 +493,13 @@ class PerchContent_Runway extends PerchContent
 	                    	if (in_array($key, $category_field_ids)) {
 	                    	    $field = $this->_process_category_field($field);
 	                    	}
+
+	                    	if ($api) {
+                                if (array_key_exists($key, $field_type_map)) {
+                                    $field = $field_type_map[$key]->get_api_value($field);
+                                    continue;
+                                }
+                            }
 
 	                        if (is_array($field) && isset($field['processed'])) {
 	                            $field = $field['processed'];
@@ -510,7 +524,7 @@ class PerchContent_Runway extends PerchContent
 	    return $html;
 	}
 
-	private function _get_category_sql($items, $negative_match=false, $match, $where_clause)
+	private function _get_category_sql($items, $negative_match, $match, $where_clause)
 	{
 	    if (count($items)) {
 	        $cat_sql = 'SELECT idx.itemID FROM '.PERCH_DB_PREFIX.'collection_index idx 

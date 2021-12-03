@@ -22,7 +22,7 @@ class PerchContent_Collections extends PerchFactory
 		return false;
 	}
 
-	public function get_data_from_ids_runtime($collectionKey, $vars, $sort=false)
+	public function get_data_from_ids_runtime($collectionKey, $vars, $sort=false, $count=false)
 	{
 		if (isset($this->cache[$collectionKey]) && $this->cache[$collectionKey]) {
 			$collectionID = $this->cache[$collectionKey];
@@ -36,7 +36,7 @@ class PerchContent_Collections extends PerchFactory
 
 		if ($collectionID) {
 			$Items = new PerchContent_CollectionItems();
-			$items = $Items->get_for_collection_by_ids_runtime($collectionID, $vars, $sort);
+			$items = $Items->get_for_collection_by_ids_runtime($collectionID, $vars, $sort, $count);
 			if (PerchUtil::count($items)) {
 				$out = [];
 				foreach($items as $Item) {
@@ -62,10 +62,11 @@ class PerchContent_Collections extends PerchFactory
 				foreach($ids as $item_id) {
 					$sql[] = 'SELECT CONCAT('.$this->db->pdb($prefix).', indexKey) AS \'key\', indexValue AS \'value\' 
 								FROM '.PERCH_DB_PREFIX.'collection_index ci, '.PERCH_DB_PREFIX.'collection_revisions cr
-								WHERE ci.collectionID=cr.collectionID AND ci.itemID=cr.itemID 
+								WHERE (ci.collectionID=cr.collectionID AND ci.itemID=cr.itemID 
 									AND ci.collectionID='.$this->db->pdb((int)$Collection->id()).' 
 									AND ci.itemID='.$this->db->pdb((int)$item_id).' 
-									AND ci.itemRev=cr.itemRev';
+									AND ci.itemRev=cr.itemRev)
+									AND ci.indexKey NOT LIKE \'%.%\'';
 				}
 
 				$sql = implode(' UNION ', $sql);

@@ -1,4 +1,9 @@
 <?php
+    $API    = new PerchAPI(1.0, 'content');
+    $HTML   = $API->get('HTML');
+    $Lang   = $API->get('Lang');
+    $Paging = $API->get('Paging');
+
 
     $Regions = new PerchContent_Regions;
     $Region  = false;
@@ -35,6 +40,7 @@
     if ($Region->get_option('edit_mode')=='listdetail' && $Region->get_option('searchURL')!='') {
         $search_url = $Region->get_option('searchURL');  
 
+        $details    = $Region->get_items_for_editing();
         $Region->tmp_url_vars = $details[0];             
         $search_url = preg_replace_callback('/{([A-Za-z0-9_\-]+)}/', array($Region, 'substitute_url_vars'), $search_url);
         $Region->tmp_url_vars = false; 

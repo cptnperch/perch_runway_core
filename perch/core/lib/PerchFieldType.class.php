@@ -10,14 +10,14 @@ class PerchFieldType
     /**
      * The form object the field is used with
      *
-     * @var object
+     * @var object|false
      */
     protected $Form = false;
 
     /**
      * The tag object for the field
      *
-     * @var object
+     * @var object|false
      */
     protected $Tag = false;
 
@@ -25,7 +25,7 @@ class PerchFieldType
     /**
      * The field ID used with setting the required validation
      *
-     * @var string
+     * @var string|false
      */
     protected $required_id = false;
 
@@ -33,7 +33,7 @@ class PerchFieldType
     /**
      * A unique ID for using when e.g. outputting unique elements to the HTML
      *
-     * @var string
+     * @var string|false
      */
     protected $unique_id = false;
 
@@ -41,7 +41,7 @@ class PerchFieldType
     /**
      * The un-processed item
      *
-     * @var array
+     * @var array|string|false
      */
     protected $raw_item = false;
 
@@ -49,7 +49,7 @@ class PerchFieldType
     /**
      * All the tags from the template
      *
-     * @var array
+     * @var array|false
      */
     protected $sibling_tags = false;
 
@@ -63,10 +63,38 @@ class PerchFieldType
 
     /**
      * The ID of the app in use
-     * @var string
+     * @var string|false
      */
     public $app_id = false;
 
+
+    /**
+     * Class to apply to the field's wrapper div (.field-wrap)
+     */
+    public $wrap_class = null;
+
+
+    /**
+     * Does the hint text go before the field? It's normally after.
+     */
+    public $hints_before = false;
+
+
+    /**
+     * For basic types that just use the base class, enable override of type="" on the rendered input.
+     */
+    public $input_type = 'text';
+
+
+    /**
+     * Paired tags expected by this field type.
+     */
+    public $tag_pairs = [];
+
+    /**
+     * Can this tag be rendered in an edit form>
+     */
+    public $editFormUnrenderable = false;
 
     public function __construct(PerchForm $Form=null, PerchXMLTag $Tag=null, $app_id)
     {
@@ -74,10 +102,24 @@ class PerchFieldType
         $this->Tag    = $Tag;
         $this->app_id = $app_id;
 
-        $this->required_id = $Tag->input_id();
+        if ($Tag) $this->required_id = $Tag->input_id();
 
         $this->add_class_dependancies();
 
+        if (PerchUtil::count($this->tag_pairs)) {
+            PerchSystem::register_tag_pairs(str_replace('PerchFieldType_', '', get_called_class()), $this->tag_pairs);
+        }
+    }
+
+    public function get_wrapper_class()
+    {
+        $s = '';
+
+        if ($this->wrap_class) {
+            $s .= $this->wrap_class.' ';
+        }
+
+        return $s;
     }
 
     public function add_page_resources()
@@ -126,29 +168,33 @@ class PerchFieldType
         $id = $this->Tag->id();
         $attrs = array();
 
-        if ($this->Tag->placeholder()) {
-            $attrs[] = 'placeholder="'.PerchUtil::html($this->Tag->placeholder(), true).'"';
+        $size = 'm';
+
+        if ($this->Tag->size()) {
+            $size = $this->Tag->size();
         }
 
-        if ($this->Tag->count()) {
-            if ($this->Tag->count()=='chars') $attrs[] = 'data-count="chars"';
-            if ($this->Tag->count()=='words') $attrs[] = 'data-count="words"';
-            $attrs[] = 'data-count-container="' . $this->Tag->input_id().'__count"';
+        $copy_atts = ['placeholder', 'autocomplete', 'autofill', 'pattern'];
+
+        foreach($copy_atts as $att) {
+            if ($this->Tag->is_set($att)) {
+                $attrs[] = $att.'="' .PerchUtil::html($this->Tag->$att(), true). '"';
+            }
         }
+
+        $attrs = array_merge($attrs, $this->get_annotation_attributes());
 
         $attrs = implode(' ', $attrs);
 
         $s = $this->Form->text($this->Tag->input_id(), 
                             $this->Form->get($details, $id, $this->Tag->default(), $this->Tag->post_prefix()), 
-                            $this->Tag->size(), 
+                            $size.' input-simple', 
                             $this->Tag->maxlength(), 
-                            'text', 
+                            $this->input_type, 
                             $attrs.$this->Tag->get_data_attribute_string()
                         );
 
-        if ($this->Tag->count()) {
-            $s .= '<div class="counter text-counter" id="'.$this->Tag->input_id().'__count"></div>';
-        }
+        $s .= $this->render_field_annotations();
 
         return $s;
     }
@@ -187,6 +233,38 @@ class PerchFieldType
         $value = $raw;
 
         return $value;
+    }
+
+    public function get_content_summary($details, $Template)
+    {
+        $id = $this->Tag->id();
+
+        if (!PerchUtil::count($details)) return '';
+
+        if (array_key_exists($id, $details)) {
+            $raw = $details[$id];
+            $value = '';
+
+            if (is_array($raw)) {
+                if (isset($raw['_title'])) {
+                    $value = trim($raw['_title']);
+                }else if (isset($raw['_default'])) {
+                    $value = trim($raw['_default']);
+                }else if (isset($raw['processed'])) {
+                    $value = trim($raw['processed']);
+                }
+            } else {
+                $value = $raw;
+            }
+
+            if ($value) {
+                $value = PerchUtil::excerpt($value, 12);
+            }
+
+            return PerchUtil::html($value, true);
+        }
+
+        return '';
     }
 
     /**
@@ -238,6 +316,19 @@ class PerchFieldType
         return $out;
     }
 
+    public function get_api_value($raw=false)
+    {
+        if ($raw===false) $raw = $this->get_raw();
+
+        if (isset($raw['processed'])) {
+            return $raw['processed'];
+        }else if (isset($raw['_default'])) {
+            return $raw['_default'];
+        }
+
+        return $raw;
+    }
+
     /**
      * Get a version of the content for listing in the admin editing interface.
      * @param  boolean $raw [description]
@@ -262,6 +353,15 @@ class PerchFieldType
 
 
     /**
+     * When data is coming in programmatically rather than from a form.
+     */
+    public function import_data($data)
+    {
+        return $this->get_raw($data);
+    }
+
+
+    /**
      * Get sibling tags from the template, if set.
      *
      * @return array
@@ -270,6 +370,83 @@ class PerchFieldType
     public function get_sibling_tags()
     {
         return $this->sibling_tags;
+    }
+
+    protected function get_annotation_attributes($as_data_attrs=false)
+    {
+        $attrs = [];
+
+        if ($this->Tag->count()) {
+            if ($as_data_attrs) {
+                if ($this->Tag->count()=='chars') $attrs['count'] = 'chars';
+                if ($this->Tag->count()=='words') $attrs['count'] = 'words';
+                $attrs['count-container'] = $this->Tag->input_id().'__count';
+            } else {
+                if ($this->Tag->count()=='chars') $attrs[] = 'data-count="chars"';
+                if ($this->Tag->count()=='words') $attrs[] = 'data-count="words"';
+                $attrs[] = 'data-count-container="' . $this->Tag->input_id().'__count"';
+            }
+            
+        }
+
+        return $attrs;
+    }
+
+    protected function render_field_annotations()
+    {
+        $s = '';
+
+        // Word/char count
+        if ($this->Tag->count()) {
+            $s .= '<div class="char-limit-count" aria-live="polite">';
+            $s .= PerchUI::icon('core/o-typewriter', 10). ' <span id="'.$this->Tag->input_id().'__count">-</span>';
+            $s .= '</div>';
+        }
+
+        // Formatting lang
+        if ($this->Tag->markdown() || $this->Tag->textile() || $this->Tag->flang()) {
+            $s .= '<div class="formatting-language">'.PerchUI::icon('core/o-pencil', 10).' ';
+
+            if ($this->Tag->markdown() || $this->Tag->flang() == 'markdown') {
+                $s .= '<a href="'.PERCH_LOGINPATH.'/core/help/markdown">Markdown</a>';
+            }
+
+            if ($this->Tag->textile() || $this->Tag->flang() == 'textile') {
+                $s .= '<a href="'.PERCH_LOGINPATH.'/core/help/textile">Textile</a>';
+            }
+            
+            $s .= '</div>';
+        }
+
+        // Max selections
+        if ($this->Tag->max()) {
+            $s .= '<div class="char-limit-count" aria-live="polite">';
+            $s .= PerchUI::icon('core/o-connect', 10). ' <span>'.PerchLang::get('Max: %s', (int)$this->Tag->max()).'</span>';
+            $s .= '</div>';
+        }
+        
+
+        if (strlen($s) > 0) {
+            $class = 'field-annotations '.$this->Tag->type().' ';
+            if ($this->Tag->size()) {
+                $class .= $this->Tag->size();
+            }
+            $id = $this->Tag->input_id();
+
+            $s = '<div class="'.PerchUtil::html($class, true).'" id="'.PerchUtil::html($id, true).'">'.$s.'</div>';
+        }
+
+        if ($s !='' || ($this->Tag->help && !$this->hints_before)) {
+            $this->wrap_class .= 'annotated ';
+        }
+
+        return $s;
+    }
+
+    protected function parse_shortcodes($html)
+    {
+        $ShortcodeParser = new PerchShortcode_Parser();
+        return $ShortcodeParser->parse($html, $this->Tag);
     }
 
 }

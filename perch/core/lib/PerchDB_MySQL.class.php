@@ -6,7 +6,6 @@
 	Prepared statements are compiled at the db server, not in PHP, so there's no way to get the 'real' query for debugging.
 	As most Perch users don't have access to the MySQL query log, this makes it almost impossible for us to help people
 	who are experiencing db problems.
-	PDO enables us to try/catch for connection problems in a way the mysqli does not. That's why we're using it over mysqli.
 
 	</trivia>
 
@@ -16,14 +15,21 @@ class PerchDB_MySQL
 	private $link     = false;
 	public $errored   = false;
 	public $error_msg = false;
+	public $error_code = false;
+
+	private $config   = [];
 
 	public $dsn = '';
 
 	static public $queries    = 0;
 
+	static public $regex_word_boundary_start = null;
+	static public $regex_word_boundary_end   = null;
 
-	function __construct()
+	function __construct($config=null)
 	{
+		if ($config) $this->config = $config;
+
 		if (!defined('PERCH_DB_CHARSET')) 	define('PERCH_DB_CHARSET', 'utf8');
 		if (!defined('PERCH_DB_PORT')) 		define('PERCH_DB_PORT', NULL);
 		if (!defined('PERCH_DB_SOCKET')) 	define('PERCH_DB_SOCKET', NULL);
@@ -34,14 +40,20 @@ class PerchDB_MySQL
 		$this->close_link();
 	}
 
+	private function config($item)
+	{
+		if (isset($this->config[$item])) return $this->config[$item];
+		return constant($item);
+	}
+
 	private function open_link()
 	{
 		$dsn_opts = array();
-		$dsn_opts['host'] 	= PERCH_DB_SERVER;
-		$dsn_opts['dbname'] = PERCH_DB_DATABASE;
+		$dsn_opts['host'] 	= $this->config('PERCH_DB_SERVER');
+		$dsn_opts['dbname'] = $this->config('PERCH_DB_DATABASE');
 
-		if (PERCH_DB_SOCKET) $dsn_opts['unix_socket'] = PERCH_DB_SOCKET;
-		if (PERCH_DB_PORT) 	 $dsn_opts['port'] 	 	  = (int)PERCH_DB_PORT;
+		if ($this->config('PERCH_DB_SOCKET')) $dsn_opts['unix_socket'] = $this->config('PERCH_DB_SOCKET');
+		if ($this->config('PERCH_DB_PORT')) 	 $dsn_opts['port'] 	 	  = (int)$this->config('PERCH_DB_PORT');
 
 		$dsn = 'mysql:';
 
@@ -53,22 +65,23 @@ class PerchDB_MySQL
 
 		$opts = NULL;
 
-		if (PERCH_DB_CHARSET) {
-			// $opts = array(PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES '".PERCH_DB_CHARSET."'");
+		if ($this->config('PERCH_DB_CHARSET')) {
+			// $opts = array(PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES '".$this->config('PERCH_DB_CHARSET')."'");
 			// PHP bug means that this const isn't always defined. Useful.
-			$opts = array(1002 => "SET NAMES '".PERCH_DB_CHARSET."'");
+			$opts = array(1002 => "SET NAMES '".$this->config('PERCH_DB_CHARSET')."'");
 		}
 
 		try {
-			$this->link = new PDO($dsn, PERCH_DB_USERNAME, PERCH_DB_PASSWORD, $opts);
+			$this->link = new PDO($dsn, $this->config('PERCH_DB_USERNAME'), $this->config('PERCH_DB_PASSWORD'), $opts);
 			if ($this->link) $this->link->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 			
 		}
 		catch (PDOException $e) {
 
-			switch(PERCH_ERROR_MODE)
+			switch($this->config('PERCH_ERROR_MODE'))
 		    {
 		        case 'SILENT':
+		        	$this->errored = true;
 		            break;
 
 		        case 'ECHO':
@@ -85,6 +98,7 @@ class PerchDB_MySQL
 
 			PerchUtil::debug("Could not create DB link!", 'error');
 			PerchUtil::debug($e->getMessage(), 'error');
+			$this->error_msg = $e->getMessage();
 
 			return false;
 		}
@@ -108,6 +122,7 @@ class PerchDB_MySQL
 
 	public function execute($sql)
 	{
+		$sql = $this->filter($sql);
 		PerchUtil::debug($sql, 'db');
 		$this->errored = false;
 
@@ -131,6 +146,7 @@ class PerchDB_MySQL
 			PerchUtil::debug("Invalid query: " . $err[2], 'error');
 			$this->errored = true;
 			$this->error_msg = $err[2];
+			$this->error_code = $link->errorCode();
 			return false;
 		}
 		$newid	= $link->lastInsertId();
@@ -147,6 +163,7 @@ class PerchDB_MySQL
 
 	public function get_rows($sql)
 	{
+		$sql = $this->filter($sql);
 		PerchUtil::debug($sql, 'db');
 		$this->errored = false;
 
@@ -202,6 +219,7 @@ class PerchDB_MySQL
 
 	public function get_rows_flat($sql)
 	{
+		$sql = $this->filter($sql);
 		PerchUtil::debug($sql, 'db');
 		$this->errored = false;
 
@@ -254,6 +272,7 @@ class PerchDB_MySQL
 
 	public function get_row($sql)
 	{
+		$sql = $this->filter($sql);
 		PerchUtil::debug($sql, 'db');
 		$this->errored = false;
 
@@ -291,6 +310,7 @@ class PerchDB_MySQL
 
 	public function get_value($sql)
 	{
+		$sql = $this->filter($sql);
 		$result = $this->get_row($sql);
 
 		if (is_array($result)) {
@@ -306,6 +326,7 @@ class PerchDB_MySQL
 
 	public function get_count($sql)
 	{
+		$sql = $this->filter($sql);
 	    $result = $this->get_value($sql);
 	    PerchUtil::debug_badge((string)$result);
 	    return intval($result);
@@ -359,7 +380,7 @@ class PerchDB_MySQL
 	public function pdb($value)
 	{
 		// Stripslashes
-		if (get_magic_quotes_runtime()) {
+		if (PERCH_STRIP_SLASHES) {
 			$value = PerchUtil::safe_stripslashes($value);
 		}
 
@@ -432,6 +453,70 @@ class PerchDB_MySQL
 	{
 		$link = $this->get_link();
 		return $link->getAttribute(PDO::ATTR_SERVER_VERSION);
+	}
+
+	public function test_connection()
+	{
+		$link = $this->get_link();
+		if ($link) return true;
+		return false;
+	}
+
+	public function word_start()
+	{
+		if (self::$regex_word_boundary_start === null) {
+			$this->set_word_boundaries();
+		}
+
+		return self::$regex_word_boundary_start;
+	}
+
+	public function word_end()
+	{
+		if (self::$regex_word_boundary_end === null) {
+			$this->set_word_boundaries();
+		}
+
+		return self::$regex_word_boundary_end;
+	}
+
+	private function set_word_boundaries()
+	{
+		$mysql_version = $this->get_server_info();
+
+		// MariaDB supports old word boundaries
+		if (strpos($mysql_version, 'MariaDB') > 0) {
+			$mysql_version = '5.7.0';
+		}
+		
+		if (version_compare($mysql_version, '8.0.4') < 0) {
+			self::$regex_word_boundary_start = '[[:<:]]';
+			self::$regex_word_boundary_end	 = '[[:>:]]';
+		} else {
+			self::$regex_word_boundary_start = '\\\\b';
+			self::$regex_word_boundary_end	 = '\\\\b';
+		}
+	}
+
+	private function filter($sql)
+	{
+		if (strpos($sql, 'REGEX') > 0) {
+			PerchUtil::debug('Filtering query', 'info');
+			
+			if (self::$regex_word_boundary_end === null) {
+				$this->set_word_boundaries();
+			}
+
+			$sql = str_replace([
+				'[[:<:]]', 
+				'[[:>:]]'
+			], [
+				self::$regex_word_boundary_start, 
+				self::$regex_word_boundary_end
+			], $sql);
+		}
+
+		return $sql;
 	}
 
 }

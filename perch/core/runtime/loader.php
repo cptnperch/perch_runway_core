@@ -16,7 +16,7 @@
 
     spl_autoload_register('perch_autoload');
 
-    if (get_magic_quotes_runtime()) set_magic_quotes_runtime(false);
+    if (!defined('PERCH_STRIP_SLASHES')) define('PERCH_STRIP_SLASHES', false);
 
     if (extension_loaded('mbstring')) mb_internal_encoding('UTF-8');
 
@@ -25,6 +25,8 @@
     }else{
         date_default_timezone_set('UTC');
     }
+
+    PerchRequest::init($_GET, $_POST, $_SERVER, $_COOKIE);
 
     $perch_key = PERCH_LICENSE_KEY;
     if ($perch_key[0]=='R') {
@@ -54,6 +56,14 @@
     include(PERCH_CORE.'/lib/PerchResourceBucket.class.php');
 
     if (PERCH_RUNWAY) include(PERCH_CORE.'/runway/runtime.php');
+
+    if (defined('PERCH_TEMPLATE_FILTERS') && PERCH_TEMPLATE_FILTERS) {
+        include PERCH_PATH.'/addons/templates/filters.php';
+    }
+
+    if (!defined('PERCH_FEATHERS')) {
+        define('PERCH_FEATHERS', false);
+    }
 
     if (!defined('PERCH_SECURITY_HEADERS') || PERCH_SECURITY_HEADERS===true) {
         PerchUtil::set_security_headers();

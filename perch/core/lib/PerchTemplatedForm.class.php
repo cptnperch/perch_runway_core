@@ -31,8 +31,9 @@ class PerchTemplatedForm
 	public function refine($formID)
 	{
 	    $contents = $this->template;
-	    $s = '/(<perch:form[^>]*id="'.$formID.'"[^>]*>)(?:(?!perch:form).*)(?:<\/perch:form>)/s';
+	    $s = '/(<perch:form[^>]*id="'.$formID.'"[^>]*>)(?:(?!perch:form).*?)(?:<\/perch:form>)/s';
 	    preg_match_all($s, $contents, $match, PREG_SET_ORDER);
+        
 	    if (PerchUtil::count($match)) {
 	        $this->template = $match[0][0];
 	        $tag = new PerchXMLTag($match[0][1]);
@@ -348,7 +349,7 @@ class PerchTemplatedForm
         return str_replace($match, $new_tag, $template);
     }
 
-    private function _replace_select_field($match, $Tag, $template)
+    private function  _replace_select_field($match, $Tag, $template)
     {
         $attrs = $this->_copy_standard_attributes($Tag);
         $option_string = $Tag->options();

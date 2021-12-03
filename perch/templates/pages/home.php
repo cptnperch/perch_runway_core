@@ -1,19 +1,19 @@
-<?php	
-	// Include the header. You can find this in tempates/layouts/global
-	perch_layout('global/header', [
-		'body-class' => 'home',
-	]);
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+	<title><?php perch_pages_title(); ?></title>
+	<?php perch_page_attributes(); ?>
+</head>
+<body>
+    <h1><?php perch_content('Main heading'); ?></h1>
 
-	// An editable content region
-	perch_content('Main heading');
+    <?php 
+    	perch_pages_navigation([
+    		'levels' => 1,
+    	]); 
+    ?>
 
-    // Main navigation
-    perch_pages_navigation([
-    	'levels'=>1
-    ]);
-
-    // An editable content region
-    perch_content('Intro');
-
- 	// Include the footer. You can find this in tempates/layouts/global
-    perch_layout('global/footer');
+    <?php perch_content('Intro'); ?>
+</body>
+</html>

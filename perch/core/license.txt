@@ -4,7 +4,7 @@ INTRODUCTION
 
 This document sets out the terms upon which we grant you permission to use *Our Software*.  We will refer to it as “the *Licence Terms*”.  It’s fundamental to the relationship we will have with you so it would be a good idea for you to read it through carefully before making use of Our Software.  If you want to purchase a licence for our software, you should read our *Purchase Terms*.  These Licence Terms just relate to your use of our Software.
 
-In these Licence Terms, when we use the words “*we*”, “*us*’ or “*our*”, we are referring to Edgeofmyseat Ltd, a company registered in England and Wales under company number 04735127.  Sometimes you may see us using the trading name Edgeofmyseat.com.  Our registered office is at Spike Island, 133 Cumberland Road, Bristol BS1 6UX, England.  
+In these Licence Terms, when we use the words “*we*”, “*us*’ or “*our*”, we are referring to Perch Runway Ltd, a company registered in England and Wales under company number 12862192.  Our registered office is at DESKGO, 120-122 Braymere Road, Hampton, Peterborough, Cambs, PE7 8NB, England.  
 
 When we use words like “*you*” or “*your*”, it’s to you, the individual (or the company on whose behalf you are acting) that will be using or deploying Our Software that we refer.  
 
@@ -30,7 +30,7 @@ It makes things a lot easier if we define at the outset what certain words will 
 
 *Third Party Software*:  means software supplied with Our Software, the Intellectual Property Rights within which are owned by third parties.
 
-*Website*:  our website, which is hosted at an IP address corresponding to http://www.grabaperch.com.
+*Website*:  our website, which is hosted at an IP address corresponding to https://grabaperch.com.
 
 Not all of the defined terms are listed in this section.  You will see words in *asterisks* elsewhere in this document – there are a few in the opening paragraphs for example.  Where you see a word or words in asterisks, that signifies a definition, so when you see that word or words used elsewhere, look back to the asterisked version to check what it/they mean.
 
@@ -148,7 +148,7 @@ We will not be liable to you for any failure on our part for reasons that are be
 
 We are satisfied that the use of Our Software by yourself or your clients will comply with English law.  You will ensure that when making use of Our Software, you (and your clients) will comply with all applicable laws and regulations whether under English law or the law of your (or your client’s) own jurisdiction, wherever that happens to be.  We will not be liable should you (or your clients) fail, whether directly or indirectly, deliberately or accidentally, to comply with those laws and regulations and you will indemnify us for any loss or expense we incur as a result of dealing with any investigations, claims or other regulatory or civil action that occurs as a result of that failure.
 
-You (our customer) and we (Edgeofmyseat Limited) are independent businesses and we are not operating in partnership or in any kind of principal/agent or employer/employee relationship, nor in any other relationship of trust to each other.
+You (our customer) and we (Perch Runway Ltd) are independent businesses and we are not operating in partnership or in any kind of principal/agent or employer/employee relationship, nor in any other relationship of trust to each other.
 
 In order to have the effect intended for them, some of the provisions of these Licence Terms will survive the termination of your licence, however that might come about.
 

@@ -7,7 +7,7 @@ class PerchAPI_Text
 
     private $Lang = false;
 
-    function __construct($version=1.0, $app_id, $Lang)
+    function __construct($version, $app_id, $Lang)
     {
         $this->app_id = $app_id;
         $this->version = $version;

@@ -13,7 +13,7 @@ class PerchAPI_Template
     
     public $namespace = false;
 
-    function __construct($version=1.0, $app_id, $Lang)
+    function __construct($version, $app_id, $Lang)
     {
         $this->app_id  = $app_id;
         $this->version = $version;
@@ -47,7 +47,7 @@ class PerchAPI_Template
         $this->Template->enable_encoding();
         $this->Template->apply_post_processing = true;
 
-        if ($default_fields) {
+        if ($default_fields && $this->Template) {
             $this->Template->append($default_fields);
         }
 
@@ -61,7 +61,6 @@ class PerchAPI_Template
         $Perch = Perch::fetch(); // called to make sure constants are defined.
 
         $this->namespace = $namespace;
-        
         
         $this->Template = new PerchTemplate(false, $namespace, $relative_path=false);    
         $this->Template->set_template('__STRING__');
@@ -107,9 +106,9 @@ class PerchAPI_Template
 		return $this->Template->find_tag($tag);
 	}
     
-    public function find_help()
+    public function find_help($id=null)
     {
-        return $this->Template->find_help();
+        return $this->Template->find_help($id);
     }
     
     public function apply_runtime_post_processing($html, $vars=array())
@@ -134,7 +133,7 @@ class PerchAPI_Template
     public function find_all_tags_and_repeaters($type=false, $contents=false)
     {
         if ($type==false) $type = $this->namespace;
-        return $this->Template->find_all_tags_and_repeaters($type, $contents);
+        return $this->Template->find_all_tags_and_repeaters($type, $contents, true);
     }
 
     public function get_block_tags($type)
@@ -145,6 +144,16 @@ class PerchAPI_Template
     public function disable_feature($feature)
     {
         return $this->Template->disable_feature($feature);
+    }
+
+    public function get_field_type_map($type='content')
+    {
+        return $this->Template->get_field_type_map($type);
+    }
+
+    public function format_value($tag, $value)
+    {
+        return $this->Template->format_value($tag, $value);
     }
 
 }

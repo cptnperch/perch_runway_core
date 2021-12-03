@@ -1,4 +1,7 @@
 <?php
+    $API    = new PerchAPI(1.0, 'core');
+    $Lang   = $API->get('Lang');
+    $HTML   = $API->get('HTML');
     
     $Regions = new PerchContent_Regions;
     $Region  = false;
@@ -32,6 +35,7 @@
 
         if ($CurrentUser->has_priv('content.regions.templates') && isset($_POST['regionTemplate'])) {
             $data['regionTemplate'] = $_POST['regionTemplate'];
+            $data['regionKey'] = $_POST['regionKey'];
         }
         
         if (!isset($data['regionMultiple'])) {
@@ -61,8 +65,30 @@
     	}else{
     	    $data['regionEditRoles'] = '';
     	}
-    	
-    	
+
+        if (PERCH_RUNWAY && (isset($_POST['publish_roles']) && PerchUtil::count($_POST['publish_roles']))) {
+            $roles = $_POST['publish_roles'];
+            $new_roles = [];
+            foreach($roles as $role) {
+                $role = trim($role);
+                if ($role=='*') {
+                    $new_roles = ['*'];
+                    break;
+                }
+                
+                $new_roles[] = (int) $role;
+            }
+            
+            if (PerchUtil::count($new_roles)) {
+                $data['regionPublishRoles'] = implode(',', $new_roles);
+            }
+        }else{
+            if (PERCH_RUNWAY) {
+                $data['regionPublishRoles'] = '';    
+            } else {
+                $data['regionPublishRoles'] = '*';
+            }
+        }
     	
         $Region->update($data);
         
@@ -108,8 +134,17 @@
     	if (!isset($data['edit_mode'])) {
     	    $data['edit_mode'] = 'listdetail';
     	}
+
+        if (!isset($data['column_ids'])) {
+            $data['column_ids'] = [];
+        }
     	
     	$Region->set_options($data);
+
+        // Reset
+        if (isset($_POST['regionReset']) && $_POST['regionReset']=='1') {
+            $Region->truncate(0);
+        }
     	
         $Region->sort_items();
         $Region->publish();

@@ -5,7 +5,7 @@ class PerchImage
     private $mode = false;
     
     // Image quality for JPEGs (0 to 99)
-    private $jpeg_quality = 85;
+    private $jpeg_quality = 90;
 
     // Compression rate for PNGs (0 to 9)
     private $png_compression = 9;
@@ -41,7 +41,7 @@ class PerchImage
     public function reset_defaults()
     {
         // Compression quality for JPEGs
-        $this->jpeg_quality = 85;
+        $this->jpeg_quality = 90;
         $this->png_compression  = 9;
 
         // Pixel density
@@ -103,8 +103,12 @@ class PerchImage
         $crop_y  = 0;
         $crop_w  = 0;
         $crop_h  = 0;
-        
-        $image_ratio = $image_w/$image_h;
+
+        if ($image_w > 0 && $image_h > 0) {
+            $image_ratio = $image_w/$image_h;    
+        } else {
+            $image_ratio = 1;
+        }
 
         if ($svg) {
 
@@ -444,6 +448,21 @@ class PerchImage
                 $out = array();
                 $out['w'] = (int)$XML->attributes()->width;
                 $out['h'] = (int)$XML->attributes()->height;
+
+                // use Viewbox?
+                if ($out['w'] == 0) {
+                    $viewbox = $XML->attributes()->viewBox;
+                    if ($viewbox) {
+                        $out = $this->getSvgDimensionsFromViewbox($viewbox);
+                    }
+                }
+
+                // In case the SVG has no dimensions
+                if ($out['w'] == 0) {
+                    $out['w'] = 150;
+                    $out['h'] = 150;
+                }
+
                 $out['mime'] = 'image/svg+xml';
 
                 // Compatibility with getimagesize
@@ -525,6 +544,71 @@ class PerchImage
         return false;
     }
 
+    public function orientate_image($file_path)
+    {
+        if (!function_exists('exif_read_data')) return;
+
+        if (defined('PERCH_ENABLE_EXIF') && PERCH_ENABLE_EXIF == false) return;
+
+        if (exif_imagetype($file_path) != IMAGETYPE_JPEG) return;
+
+        $exif = exif_read_data($file_path);
+        if ($exif && is_array($exif) && isset($exif['Orientation'])) {
+            $orientation = (int) $exif['Orientation'];
+
+            switch($orientation) {
+                case 1:
+                    return;
+                    break;
+
+                case 2:
+                    $rotate = 0;
+                    $flip   = true;
+                    break;
+
+                case 3:
+                    $rotate = 180;
+                    $flip   = false;
+                    break;
+
+                case 4:
+                    $rotate = 180;
+                    $flip   = true;
+                    break;
+
+                case 5:
+                    $rotate = 270;
+                    $flip   = true;
+                    break;
+
+                case 6:
+                    $rotate = 270;
+                    $flip   = false;
+                    break;
+
+                case 7:
+                    $rotate = 90;
+                    $flip   = true;
+                    break;
+
+                case 8:
+                    $rotate = 90;
+                    $flip   = false;
+                    break;
+            }
+
+            if ($this->mode == 'gd') {
+                $this->rotate_with_gd($file_path, $rotate, $flip); 
+            }
+            
+            if ($this->mode == 'imagick') {
+                $this->rotate_with_imagick($file_path, $rotate, $flip);
+            }
+
+        }
+
+        return;
+    }
 
     private function resize_with_gd($image_path, $save_as, $new_w, $new_h, $crop_w, $crop_h, $crop_x, $crop_y)
     {   
@@ -612,7 +696,7 @@ class PerchImage
 
                 imagealphablending($new_image, false);
                 imagesavealpha($new_image, true);
-                          
+
                 if (function_exists('imagecopyresampled')) {
                     imagecopyresampled($new_image, $orig_image, 0, 0, 0, 0, $new_w, $new_h, $image_w, $image_h);
                 }else{
@@ -622,7 +706,7 @@ class PerchImage
                 // sharpen
                 if ($this->sharpening) {
                     $colour = imagecolorat($new_image, 0, 0);
-                    $new_image = $this->sharpen_with_gd($new_image, $this->sharpening);
+                    $new_image = $this->sharpen_with_gd($new_image, floor($this->sharpening/2));
                     imagesetpixel($new_image, 0, 0, $colour);
                 }
 
@@ -693,7 +777,7 @@ class PerchImage
         
     }
     
-    private function sharpen_with_gd($image, $setting=5)
+    private function sharpen_with_gd($image, $setting=4)
     {
         if (!function_exists('imageconvolution')) return $image;
 
@@ -703,27 +787,35 @@ class PerchImage
 
         switch($setting) {
             case 0:  return $image; // no sharpening
-            case 1:  $value=45; break;
-            case 2:  $value=40; break;
-            case 3:  $value=36; break;
-            case 4:  $value=32; break;
-            case 5:  $value=28; break;
-            case 6:  $value=20; break;
-            case 7:  $value=16; break;
-            case 8:  $value=14; break;
-            case 9:  $value=12; break;
-            case 10: $value=10; break;
+            case 1:  $amount = 4; break;
+            case 2:  $amount = 5; break;
+            case 3:  $amount = 6; break;
+            case 4:  $amount = 8; break;
+            case 5:  $amount = 9; break;
+            case 6:  $amount = 14; break;
+            case 7:  $amount = 19; break;
+            case 8:  $amount = 24; break;
+            case 9:  $amount = 32; break;
+            case 10: $amount = 48; break;
         }
 
+        /**
+            Matrix calculations from Intervention Image.
+            MIT licensed. Copyright (c) 2014 Oliver Vogel.
+            Thanks Oliver.
+        **/
+        $min = $amount >= 10 ? $amount * -0.01 : 0;
+        $max = $amount * -0.025;
+        $abs = ((4 * $min + 4 * $max) * -1) + 1;
+        $div = 1;
+
         $matrix = array(
-            array(-1, -1, -1),
-            array(-1, $value, -1),
-            array(-1, -1, -1),
+            array($min, $max, $min),
+            array($max, $abs, $max),
+            array($min, $max, $min)
         );
 
-        $divisor = array_sum(array_map('array_sum', $matrix));
-        $offset = 0; 
-        imageconvolution($image, $matrix, $divisor, $offset);
+        imageconvolution($image, $matrix, $div, 0);
 
         return $image;
     }
@@ -773,9 +865,24 @@ class PerchImage
         
         $mime = 'image/'.$Image->getImageFormat();
 
-        // progressive jpg?
-        if (strtolower($mime) == 'image/jpeg' && $this->progressive_jpeg) {
-            $Image->setInterlaceScheme(Imagick::INTERLACE_PLANE);
+        // jpg optimisations
+        if (strtolower($mime) == 'image/jpeg') {
+
+            // progressive jpg?
+            if ($this->progressive_jpeg) {
+                $Image->setInterlaceScheme(Imagick::INTERLACE_PLANE);    
+            }
+            
+            $Image->setImageCompressionQuality($this->jpeg_quality);
+
+            $profiles = $Image->getImageProfiles("icc", true);
+
+            $Image->stripImage();
+
+            if (!empty($profiles)) {
+                $Image->profileImage("icc", $profiles['icc']);
+            }
+
         }
 
         $Image->writeImage($save_as);
@@ -835,4 +942,86 @@ class PerchImage
         return false;
     }
     
+
+    private function rotate_with_gd($image_path, $degrees, $flip) 
+    {
+        if ($this->is_webp($image_path)) {
+            $mime    = 'image/webp';
+        }else{
+            $info = getimagesize($image_path);
+            if (!is_array($info)) return false;
+            
+            $image_w = $info[0];
+            $image_h = $info[1];
+            $mime    = $info['mime'];
+        }
+
+        switch ($mime) {
+            case 'image/jpeg':
+                $orig_image = imagecreatefromjpeg($image_path);
+                $new_image  = imagerotate($orig_image, $degrees, 0);
+                if ($flip && function_exists('imageflip')) {
+                    imageflip($new_image, IMG_FLIP_HORIZONTAL);
+                }
+                imagejpeg($new_image, $image_path, 100);
+
+                imagedestroy($orig_image);
+                imagedestroy($new_image);  
+
+                break;
+        }
+
+        return;
+    }
+
+    private function rotate_with_imagick($image_path, $degrees, $flip) 
+    {
+        $degrees = $this->normalize_imagick_rotation($degrees);
+
+        $Image = new Imagick();
+        $Image->readImage($image_path);
+        if ($degrees > 0) {
+            $Image->rotateImage(new ImagickPixel(), $degrees);
+        }
+        if ($flip) {
+            $Image->flopImage();
+        }
+        $Image->writeImage($image_path);
+        $Image->destroy();  
+        return;
+    }
+
+    private function normalize_imagick_rotation($value)
+    {
+        if ($value == 0 || $value == 180) {
+            return $value;
+        }
+        if ($value < 0 || $value > 360) {
+            $value = 90;
+        }
+
+        $total_degree = 360;
+        $output = intval($total_degree-$value);
+        return $output;
+    }
+
+    private function getSvgDimensionsFromViewbox($viewbox)
+    {
+        $out = [];
+        $out['w'] = 0;
+        $out['h'] = 0;
+
+        if (strpos($viewbox, ',') !== false) {
+            $dims = explode(',', $viewbox);
+        } else {
+            $dims = explode(' ', $viewbox);
+        }
+
+        if (PerchUtil::count($dims)) {
+            $out['w'] = (int)trim($dims[2]);
+            $out['h'] = (int)trim($dims[3]);
+        }
+
+        return $out;
+    }
 }

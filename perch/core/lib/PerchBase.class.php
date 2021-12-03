@@ -4,8 +4,10 @@ class PerchBase
 {
     protected $db;
     protected $details;
+    protected $table;
 
     protected $index_table          = false;
+    protected $optimize_index       = true;
 
     protected $api                  = false;
 
@@ -18,6 +20,10 @@ class PerchBase
 
     protected $pk_is_int = true;
     protected $pk        = null;
+
+    protected $exclude_from_api = [];
+
+    public $prefix_vars  = true;
 
     public function __construct($details)
     {
@@ -54,6 +60,11 @@ class PerchBase
 		return false;
 	}
 
+    public function set_pk($col)
+    {
+        $this->pk = $col;
+    }
+
     public function set_null_id()
     {
         $this->details[$this->pk] = null;
@@ -73,10 +84,36 @@ class PerchBase
         if (isset($out[$dynamic_field_col]) && $out[$dynamic_field_col] != '') {
             $dynamic_fields = PerchUtil::json_safe_decode($out[$dynamic_field_col], true);
             if (PerchUtil::count($dynamic_fields)) {
-                foreach($dynamic_fields as $key=>$value) {
-                    $out['perch_'.$key] = $value;
+                if ($this->prefix_vars) {
+                    foreach($dynamic_fields as $key=>$value) {
+                        $out['perch_'.$key] = $value;
+                    }    
                 }
                 $out = array_merge($dynamic_fields, $out);
+            }
+        }
+
+        return $out;
+    }
+
+    public function to_array_for_api()
+    {
+        // get current value
+        $prefix_vars = $this->prefix_vars;
+        // set to false
+        $this->prefix_vars = false;
+
+        // get content
+        $out =  $this->to_array();
+        
+        // set back to old value
+        $this->prefix_vars = $prefix_vars;
+
+        $this->exclude_from_api[] = str_replace('ID', 'DynamicFields', $this->pk);
+
+        foreach($this->exclude_from_api as $col) {
+            if (array_key_exists($col, $out)) {
+                unset($out[$col]);
             }
         }
 
@@ -137,6 +174,8 @@ class PerchBase
     {
         if (!$this->index_table) return;
 
+        PerchUtil::mb_fallback();
+
         $table = PERCH_DB_PREFIX.$this->index_table;
 
         // clear out old items
@@ -163,7 +202,7 @@ class PerchBase
         if (PerchUtil::count($fields)) {
             foreach($fields as $key=>$value) {
 
-                if (strpos($key, 'DynamicFields')!==false || substr($key, 0, 6)=='perch_' || strpos($key, 'JSON')!==false) {
+                if (strpos($key, 'DynamicFields')!==false || mb_substr($key, 0, 6)=='perch_' || mb_strpos($key, 'JSON')!==false) {
                     continue;
                 }
 
@@ -185,8 +224,8 @@ class PerchBase
                         $data = array();
                         $data['itemKey']    = $this->db->pdb($this->pk);
                         $data['itemID']     = ($this->pk_is_int ? (int) $this->id() : $this->db->pdb($this->id()));
-                        $data['indexKey']   = $this->db->pdb(substr($index_item['key'], 0, 64));
-                        $data['indexValue'] = $this->db->pdb(substr($index_item['value'], 0, 255));
+                        $data['indexKey']   = $this->db->pdb(mb_substr($index_item['key'], 0, 64));
+                        $data['indexValue'] = $this->db->pdb(mb_substr($index_item['value'], 0, 255));
 
                         $values[] = '('.implode(',', $data).')';
 
@@ -211,8 +250,11 @@ class PerchBase
         $this->db->execute($sql);
 
         // optimize index
-        $sql = 'OPTIMIZE TABLE '.$table;
-        $this->db->get_row($sql);
+        if ($this->optimize_index) {
+            $sql = 'OPTIMIZE TABLE '.$table;
+            $this->db->get_row($sql);    
+        }
+        
 
         if ($this->event_prefix && !$this->suppress_events) {
             $Perch = Perch::fetch();

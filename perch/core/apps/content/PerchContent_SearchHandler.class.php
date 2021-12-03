@@ -8,7 +8,7 @@ class PerchContent_SearchHandler implements PerchAPI_SearchHandler
         $db = PerchDB::fetch();
         $encoded_key = str_replace('"', '', PerchUtil::json_safe_encode($key));
 
-        $sql = '   \''.__CLASS__.'\' AS source, MATCH(ci.itemSearch) AGAINST('.$db->pdb($key).') AS score, 
+        $sql = '   \''.__CLASS__.'\' AS source, \'Page Content\' AS display_source, MATCH(ci.itemSearch) AGAINST('.$db->pdb($key).') AS score, 
                 r.regionPage AS col1, ci.itemSearch AS col2, ci.itemJSON AS col3, r.regionOptions AS col4, p.pageNavText AS col5, p.pageTitle AS col6, r.regionID AS col7, ci.itemID AS col8
                 FROM '.PERCH_DB_PREFIX.'content_regions r, '.PERCH_DB_PREFIX.'content_items ci, '.PERCH_DB_PREFIX.'pages p
                 WHERE r.regionID=ci.regionID AND r.regionRev=ci.itemRev AND r.pageID=p.pageID AND r.regionPage!=\'*\' 
@@ -30,8 +30,18 @@ class PerchContent_SearchHandler implements PerchAPI_SearchHandler
                 FROM '.PERCH_DB_PREFIX.'content_regions r, '.PERCH_DB_PREFIX.'content_items ci, '.PERCH_DB_PREFIX.'pages p
                 WHERE r.regionID=ci.regionID AND r.regionRev=ci.itemRev AND r.pageID=p.pageID AND r.regionPage!=\'*\' AND r.regionSearchable=1 
                     AND (MATCH(ci.itemSearch) AGAINST('.$db->pdb($key).') OR MATCH(ci.itemSearch) AGAINST('.$db->pdb($encoded_key).') )
-                    AND r.regionPage LIKE '.$db->pdb($opts['from-path'].'%').' 
-                    ';
+                    AND (';
+
+            if (is_array($opts['from-path']) && PerchUtil::count($opts['from-path'])) {
+                $pathopts = [];
+                foreach($opts['from-path'] as $frompath) {
+                    $pathopts[] = 'r.regionPage LIKE '.$db->pdb($frompath.'%');
+                }
+                $sql .= implode(' OR ', $pathopts);
+            } else {
+                $sql .= 'r.regionPage LIKE '.$db->pdb($opts['from-path'].'%');
+            }
+            $sql .= ') ';
 
         return $sql;
 
@@ -48,7 +58,19 @@ class PerchContent_SearchHandler implements PerchAPI_SearchHandler
                 FROM '.PERCH_DB_PREFIX.'content_regions r, '.PERCH_DB_PREFIX.'content_items ci, '.PERCH_DB_PREFIX.'pages p
                 WHERE r.regionID=ci.regionID AND r.regionRev=ci.itemRev AND r.pageID=p.pageID AND r.regionPage!=\'*\' AND r.regionSearchable=1 
                     AND ci.itemSearch REGEXP '.$db->pdb('[[:<:]]'.$key.'[[:>:]]').' 
-                    AND r.regionPage LIKE '.$db->pdb($opts['from-path'].'%').' ';
+                    AND (';
+
+
+            if (is_array($opts['from-path']) && PerchUtil::count($opts['from-path'])) {
+                $pathopts = [];
+                foreach($opts['from-path'] as $frompath) {
+                    $pathopts[] = 'r.regionPage LIKE '.$db->pdb($frompath.'%');
+                }
+                $sql .= implode(' OR ', $pathopts);
+            } else {
+                $sql .= 'r.regionPage LIKE '.$db->pdb($opts['from-path'].'%');
+            }
+            $sql .= ') ';
 
         return $sql;
     }
@@ -121,6 +143,9 @@ class PerchContent_SearchHandler implements PerchAPI_SearchHandler
             $out['pageNavText'] = $result[$_pageNavText];
             $out['source']      = $result['source'];
             $out['region_key']  = $result[$_regionKey];
+
+
+            if (isset($result['display_source'])) $out['display_source'] = $result['display_source'];
 
             // duplicate vals
             foreach($out as $k=>$val) {

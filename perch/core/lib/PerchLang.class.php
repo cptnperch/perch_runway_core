@@ -1,6 +1,6 @@
 <?php
 
-class PerchLang 
+class PerchLang
 {
     static protected $instance;
     public $lang_dir;
@@ -53,11 +53,13 @@ class PerchLang
      *
      * @param string $string 
      * @param string $values 
-     * @return void
+     * @return string Translated string
      * @author Drew McLellan
      */
     public static function get($string, $values=false)
     {
+        if (trim($string) == '') return '';
+
         $Lang = PerchLang::fetch();
         $string = $Lang->get_translated_string($string);
         
@@ -69,6 +71,10 @@ class PerchLang
                 array_shift($args);
                 $string = vsprintf($string, $args);
             }
+        }
+
+        if (PERCH_TRANSLATION_ASSIST) { // koala mode 🐨 ô
+            return 'Iñtërnât[['.$string.']]iônàližætiøn';
         }
         
         return $string;
@@ -93,7 +99,7 @@ class PerchLang
     {
         $Lang = PerchLang::fetch();
         
-        $out = array();
+        $out = [];
         
         // Addons folder
         if (is_dir(PerchUtil::file_path(PERCH_PATH.'/addons/lang'))) {
@@ -127,7 +133,7 @@ class PerchLang
             return $out;
         }
         
-        return false;
+        return [];
     }
     
     public function reload()

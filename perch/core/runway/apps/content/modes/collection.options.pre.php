@@ -1,4 +1,7 @@
 <?php
+    $API  = new PerchAPI(1.0, 'content');
+    $HTML = $API->get('HTML');
+    $Lang   = $API->get('Lang');
     
     $Collections = new PerchContent_Collections;
     $Regions = new PerchContent_Regions;
@@ -68,6 +71,27 @@
     	}else{
     	    $data['collectionEditRoles'] = '';
     	}
+
+
+        if (isset($_POST['publish_roles']) && PerchUtil::count($_POST['publish_roles'])) {
+            $roles = $_POST['publish_roles'];
+            $new_roles = array();
+            foreach($roles as $role) {
+                $role = trim($role);
+                if ($role=='*') {
+                    $new_roles = array('*');
+                    break;
+                }
+                
+                $new_roles[] = (int) $role;
+            }
+            
+            if (PerchUtil::count($new_roles)) {
+                $data['collectionPublishRoles'] = implode(',', $new_roles);
+            }
+        }else{
+            $data['collectionPublishRoles'] = '';
+        }
     	   	
     	
         $Collection->update($data);
@@ -89,8 +113,18 @@
     	if (!isset($data['addToTop'])) {
             $data['addToTop'] = 0;
         }
+
+        if (!isset($data['column_ids'])) {
+            $data['column_ids'] = [];
+        }
     	
     	$Collection->set_options($data);
+
+        // Reset
+        if (isset($_POST['collectionReset']) && $_POST['collectionReset']=='1') {
+            $Collection->delete_all_items();
+        }
+        
     	
         $Collection->sort_items();
         
@@ -113,4 +147,3 @@
     $Roles = new PerchUserRoles();
     $roles = $Roles->all();
     
-?>

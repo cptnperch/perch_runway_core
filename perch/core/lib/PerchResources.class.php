@@ -8,7 +8,7 @@ class PerchResources extends PerchFactory
 
     static $logged = array();
 	
-    public function log($app='content', $bucket='default', $file, $parentID=0, $resource_key='', $library_resource=false, $details=false, $AssetMeta=false)
+    public function log($app='content', $bucket='default', $file=false, $parentID=0, $resource_key='', $library_resource=false, $details=false, $AssetMeta=false)
     {
         if (isset($details['assetID'])) {
             $newID = $details['assetID'];
@@ -113,7 +113,7 @@ class PerchResources extends PerchFactory
         }
     }
 
-    public function get_not_in_subquery($app='content', $subquery)
+    public function get_not_in_subquery($app='content', $subquery=false)
     {
         #PerchUtil::mark('Resource clean up');
         $clean_resources = true;

@@ -5,6 +5,7 @@
 
 	$API  = new PerchAPI(1.0, 'assets');
 	$HTML = $API->get('HTML');
+	$Lang = $API->get('Lang');
 
 	$Assets = new PerchAssets_Assets;
 
@@ -33,6 +34,10 @@
 	    $filters['date'] = $_GET['date'];
 	}
 
+	if (isset($_GET['tag']) && $_GET['tag']!='') {
+	    $filters['tag'] = $_GET['tag'];
+	}
+
 
 	if (isset($_GET['view']) && $_GET['view']!='') {
 		if ($_GET['view']=='list') {
@@ -45,9 +50,9 @@
 	if (isset($_GET['q']) && $_GET['q']!='') {
 	    $term = $_GET['q'];
 	    
-	    $assets = $Assets->search($term, $filters);
+	    $assets = $Assets->search($term, $filters, $CurrentUser);
 	}else{
-	    $assets = $Assets->get_filtered_for_admin($Paging, $filters); 
+	    $assets = $Assets->get_filtered_for_admin($Paging, $filters, $CurrentUser); 
 	}
 
 	

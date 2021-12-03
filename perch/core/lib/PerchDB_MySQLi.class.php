@@ -5,12 +5,26 @@ class PerchDB_MySQLi
     private $link = false;
 	public $errored   = false;
 	public $error_msg = false;
+	public $error_code = false;
+
+	private $config   = [];
 	
 	static public $queries    = 0;
+
+	static public $regex_word_boundary_start = null;
+	static public $regex_word_boundary_end   = null;
 	
 
-	function __construct()
+	function __construct($config=null)
 	{
+		if (!function_exists('mysqli_report')) {
+			die('No method to connect to MySQL exists. Please install PDO MySQL.');
+		}
+		
+		mysqli_report(MYSQLI_REPORT_STRICT);
+
+		if ($config) $this->config = $config;
+
 		if (!defined('PERCH_DB_CHARSET')) 	define('PERCH_DB_CHARSET', NULL);
 		if (!defined('PERCH_DB_PORT')) 		define('PERCH_DB_PORT', NULL);
 		if (!defined('PERCH_DB_SOCKET')) 	define('PERCH_DB_SOCKET', NULL);
@@ -20,19 +34,23 @@ class PerchDB_MySQLi
 	{
 		$this->close_link();
 	}
+
+	private function config($item)
+	{
+		if (isset($this->config[$item])) return $this->config[$item];
+		return constant($item);
+	}
 		
 	private function open_link() 
 	{
 		try {
-			$this->link = new mysqli(PERCH_DB_SERVER, PERCH_DB_USERNAME, PERCH_DB_PASSWORD, PERCH_DB_DATABASE, PERCH_DB_PORT, PERCH_DB_SOCKET);
+			$this->link = new mysqli($this->config('PERCH_DB_SERVER'), $this->config('PERCH_DB_USERNAME'), $this->config('PERCH_DB_PASSWORD'), $this->config('PERCH_DB_DATABASE'), $this->config('PERCH_DB_PORT'), $this->config('PERCH_DB_SOCKET'));
 		} catch (Exception $e) {
 			
-		}
-
-		if ($this->link->connect_errno) {
-		    switch(PERCH_ERROR_MODE) 
+			switch($this->config('PERCH_ERROR_MODE')) 
 		    {
 		        case 'SILENT':
+		        	$this->errored = true;
 		            break;
 		            
 		        case 'ECHO':
@@ -43,15 +61,17 @@ class PerchDB_MySQLi
 		            break;
 		            
 		        default:
-		            PerchUtil::redirect(PERCH_LOGINPATH.'/core/error/db.php');
+		            PerchUtil::redirect($this->config('PERCH_LOGINPATH').'/core/error/db.php');
 		            break;
 		    }
 
 			PerchUtil::debug("Could not create DB link!", 'error');
+			PerchUtil::debug($e->getMessage(), 'error');
+			$this->error_msg = $e->getMessage();
 			return false;
 		}
 
-		if (PERCH_DB_CHARSET && !$this->link->set_charset(PERCH_DB_CHARSET)) {
+		if ($this->config('PERCH_DB_CHARSET') && !$this->link->set_charset($this->config('PERCH_DB_CHARSET'))) {
 		    PerchUtil::debug("Error loading character set utf8: ". $this->link->error, 'error');
 		}
 		
@@ -81,6 +101,7 @@ class PerchDB_MySQLi
 	
 	public function execute($sql) 
 	{
+		$sql = $this->filter($sql);
 		PerchUtil::debug($sql, 'db');
 		$this->errored = false;
 
@@ -95,6 +116,7 @@ class PerchDB_MySQLi
 			PerchUtil::debug("Invalid query: " . $link->error, 'error');
 			$this->errored = true;
 			$this->error_msg = $link->error;
+			$this->error_code = $link->errno;
 			return false;
 		}
 		
@@ -112,7 +134,7 @@ class PerchDB_MySQLi
 	
 	public function get_rows($sql) 
 	{
-		
+		$sql = $this->filter($sql);
 		PerchUtil::debug($sql, 'db');
 		$this->errored = false;
 
@@ -149,7 +171,7 @@ class PerchDB_MySQLi
 	
 	public function get_rows_flat($sql) 
 	{
-		
+		$sql = $this->filter($sql);
 		PerchUtil::debug($sql, 'db');
 		$this->errored = false;
 
@@ -187,6 +209,7 @@ class PerchDB_MySQLi
 
 	public function get_row($sql) 
 	{
+		$sql = $this->filter($sql);
 		PerchUtil::debug($sql, 'db');
 		$this->errored = false;
 
@@ -219,7 +242,7 @@ class PerchDB_MySQLi
 	
 	public function get_value($sql) 
 	{
-		
+		$sql = $this->filter($sql);
 		$result = $this->get_row($sql);
 
 		if (is_array($result)) {
@@ -234,6 +257,7 @@ class PerchDB_MySQLi
 	
 	public function get_count($sql)
 	{
+		$sql = $this->filter($sql);
 	    $result = $this->get_value($sql);
 	    return intval($result);
 	}
@@ -293,7 +317,7 @@ class PerchDB_MySQLi
 	public function pdb($value)
 	{
 		// Stripslashes
-		if (get_magic_quotes_runtime()) {
+		if (PERCH_STRIP_SLASHES) {
 			$value = PerchUtil::safe_stripslashes($value);
 		}
 		
@@ -364,6 +388,70 @@ class PerchDB_MySQLi
 	{
 		$link = $this->get_link();
 		return $link->server_info;
+	}
+
+	public function test_connection()
+	{
+		$link = $this->get_link();
+		if ($link) return true;
+		return false;
+	}
+
+	public function word_start()
+	{
+		if (self::$regex_word_boundary_start === null) {
+			$this->set_word_boundaries();
+		}
+
+		return self::$regex_word_boundary_start;
+	}
+
+	public function word_end()
+	{
+		if (self::$regex_word_boundary_end === null) {
+			$this->set_word_boundaries();
+		}
+
+		return self::$regex_word_boundary_end;
+	}
+
+	private function set_word_boundaries()
+	{
+		$mysql_version = $this->get_server_info();
+
+		// MariaDB supports old word boundaries
+		if (strpos($mysql_version, 'MariaDB') > 0) {
+			$mysql_version = '5.7.0';
+		}
+		
+		if (version_compare($mysql_version, '8.0.4') < 0) {
+			self::$regex_word_boundary_start = '[[:<:]]';
+			self::$regex_word_boundary_end	 = '[[:>:]]';
+		} else {
+			self::$regex_word_boundary_start = '\\\\b';
+			self::$regex_word_boundary_end	 = '\\\\b';
+		}
+	}
+
+	private function filter($sql)
+	{
+		if (strpos($sql, 'REGEX') > 0) {
+			PerchUtil::debug('Filtering query', 'info');
+			
+			if (self::$regex_word_boundary_end === null) {
+				$this->set_word_boundaries();
+			}
+
+			$sql = str_replace([
+				'[[:<:]]', 
+				'[[:>:]]'
+			], [
+				self::$regex_word_boundary_start, 
+				self::$regex_word_boundary_end
+			], $sql);
+		}
+
+		return $sql;
 	}
 	
 }

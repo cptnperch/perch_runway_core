@@ -3,11 +3,17 @@
 class PerchResourceBucket
 {
 	protected $name;
+	protected $label;
 	protected $type;
+	protected $role;
 	protected $web_path;
 	protected $file_path;
 
 	protected $error;
+
+	protected $allow_non_uploads = false;
+	protected $allow_overwrite   = false;
+
 
 	public function __construct($details)
 	{
@@ -17,6 +23,31 @@ class PerchResourceBucket
 		$this->type      = $details['type'];
 		$this->web_path  = $details['web_path'];
 		$this->file_path = $details['file_path'];
+
+		if (isset($details['label'])) {
+			$this->label = $details['label'];
+		} else {
+			$this->label = ucwords($this->name);
+		}
+
+		if (isset($details['role'])) {
+			$this->role = $details['role'];
+		}
+
+		if (isset($details['overwrite']) && $details['overwrite']) {
+			$this->allow_overwrite = true;
+		} 
+	}
+
+	public function to_array()
+	{
+		return [
+			'name'      => $this->name,
+			'type'      => $this->type,
+			'web_path'  => $this->web_path,
+			'file_path' => $this->file_path,
+			'remote'    => $this->is_remote(),
+		];
 	}
 
 	public function get_name()
@@ -24,9 +55,19 @@ class PerchResourceBucket
 		return $this->name;
 	}
 
+	public function get_label()
+	{
+		return $this->label;
+	}
+
 	public function get_type()
 	{
 		return $this->type;
+	}
+
+	public function get_role()
+	{
+		return $this->role;
 	}
 
 	public function get_web_path()
@@ -44,6 +85,11 @@ class PerchResourceBucket
 		return $this->type!='file';
 	}
 
+	public function get_web_path_for_file($file)
+	{
+		return $this->get_web_path() .'/'.$file;
+	}
+
 	/**
 	 * Is the bucket ready to be written to? Time to check permissions
 	 * @return bool Ready?
@@ -53,7 +99,7 @@ class PerchResourceBucket
 		return is_writable($this->file_path);
 	}
 
-	public function write_file($file, $name)
+	public function write_file($file, $name, $allow_overwrite = false)
 	{
 		$filename = PerchUtil::tidy_file_name($name);
 
@@ -64,22 +110,35 @@ class PerchResourceBucket
 
 		$target = PerchUtil::file_path($this->file_path.'/'.$filename);
 
-		if (file_exists($target)) {                                        
-		    $dot = strrpos($filename, '.');
-		    $filename_a = substr($filename, 0, $dot);
-		    $filename_b = substr($filename, $dot);
+		if (file_exists($target)) {     
 
-		    $count = 1;
-		    while (file_exists(PerchUtil::file_path($this->file_path.'/'.PerchUtil::tidy_file_name($filename_a.'-'.$count.$filename_b)))) {
-		        $count++;
-		    }
+			if ($allow_overwrite && $this->allow_overwrite) {
+				unlink($target);
+			} else {			
+			    $dot = strrpos($filename, '.');
+			    $filename_a = substr($filename, 0, $dot);
+			    $filename_b = substr($filename, $dot);
 
-		    $filename   = PerchUtil::tidy_file_name($filename_a . '-' . $count . $filename_b);
-		    $target     = PerchUtil::file_path($this->file_path.'/'.$filename);
+			    $count = 1;
+			    while (file_exists(PerchUtil::file_path($this->file_path.'/'.PerchUtil::tidy_file_name($filename_a.'-'.$count.$filename_b)))) {
+			        $count++;
+			    }
+
+			    $filename   = PerchUtil::tidy_file_name($filename_a . '-' . $count . $filename_b);
+			    $target     = PerchUtil::file_path($this->file_path.'/'.$filename);
+			}
+
+
 
 		}
+
+		if ($this->allow_non_uploads) {
+			copy($file, $target);
+			PerchUtil::set_file_permissions($target);
+		} else {
+			PerchUtil::move_uploaded_file($file, $target);	
+		}
 		
-		PerchUtil::move_uploaded_file($file, $target);
 
 		return array(
 				'name' => $filename,
@@ -121,18 +180,9 @@ class PerchResourceBucket
 		return $a;
 	}
 
-	public function old_get_files_with_prefix($prefix, $subpath=false)
+	public function enable_non_uploaded_files()
 	{
-		$out = array();
-		$files = PerchUtil::get_dir_contents($this->get_file_path().$subpath);
-		if (PerchUtil::count($files)) {
-			foreach($files as $file) {
-				if (substr($file, 0, strlen($prefix))==$prefix) {
-					$out[] = $file;
-				}
-			}
-		}
-		return $out;
+		$this->allow_non_uploads = true;
 	}
 
 }
